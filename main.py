@@ -1,6 +1,8 @@
 import cv2 as cv
 import sys
 import numpy as np
+from chunk_info.chunk_dict import TAGS, DATA_FORMAT
+import struct
 
 
 def display_image():
@@ -11,6 +13,8 @@ def display_image():
     image = cv.resize(image, (600, 800)) 
     cv.imshow("Test image", image)
     cv.waitKey(0)
+
+
 
 
 def DFT():
@@ -70,6 +74,93 @@ def DFT():
     cv.waitKey()
 
 
+
+
+def parse_exif(file):
+    content = file.read()
+    offset = content.index(bytes.fromhex('FFE1'))
+    file.seek(offset + 2)
+    app1_data_size = file.read(2)
+    print("APP1 data size:", int.from_bytes(app1_data_size, byteorder='little'))
+    format = file.read(4)
+    print("Format:", format.decode('utf-8'))
+    file.seek(2, 1)
+    start_tiff_header = file.tell()
+    byte_align = file.read(2)
+    if byte_align.decode('utf-8') == 'II':
+        print("Little-endian")
+        byte_align = 'little'
+    else:
+        print("Big-endian")
+        byte_align = 'big'
+    file.seek(2, 1)
+    offset = file.read(4)
+    offset = int.from_bytes(offset, byteorder=byte_align)
+    file.seek(start_tiff_header + offset)
+
+    print('METADATA FROM IFD0:')
+    exif_offset, last_entry_adrress_ifd0 = read_entries(file, byte_align)
+
+    print("METADATA FROM EXIF_SUBIFD:")
+    file.seek(exif_offset+12)
+    read_entries(file, byte_align)
+
+    print("METADATA FROM IFD1:")
+    file.seek(last_entry_adrress_ifd0)
+    offset = file.read(4)
+    offset = int.from_bytes(offset, byteorder=byte_align)
+    file.seek(offset + 12)
+    read_entries(file, byte_align)
+
+
+
+
+def read_entries(file, byte_align):
+    number_entries = file.read(2)
+    number_entries = int.from_bytes(number_entries, byte_align)
+    start_first_entry = file.tell()
+    for entry in range(1, number_entries+1):
+        file.seek(start_first_entry, 0)
+        start_first_entry += 12
+        tag = file.read(2)
+        tag = int.from_bytes(tag, byteorder='little')
+        if tag in TAGS:
+            print(TAGS[tag], end=': ')
+        else:
+            continue
+        data_format = file.read(2)
+        data_format = int.from_bytes(data_format, byte_align)
+        number_elements = file.read(4)
+        number_elements = int.from_bytes(number_elements, byte_align)
+        if (DATA_FORMAT[data_format][0] * number_elements) <= 4:
+            data = file.read(4)
+        else:
+            offset = file.read(4)
+            offset = int.from_bytes(offset, byte_align)
+            file.seek(offset + 12)
+            data = file.read(DATA_FORMAT[data_format][0] * number_elements)
+    
+        if DATA_FORMAT[data_format][1] == 'int':
+            data = int.from_bytes(data, byteorder='little')
+        elif DATA_FORMAT[data_format][1] == 'str':
+            data = data.decode('ascii')
+        elif DATA_FORMAT[data_format][1] == 'float':
+            data = struct.unpack('f', data)
+        elif DATA_FORMAT[data_format][1] == 'rational':
+            data1 = int.from_bytes(data[0:4], byte_align)
+            data2 = int.from_bytes(data[4:8], byte_align)
+            data = str(data1) + '/' + str(data2)
+        print(data)
+        exif_offset = data
+        last_entry_adrress = file.tell()
+    print('----------------------------------------')
+    return exif_offset, last_entry_adrress
+
+    
+
 display_image()
 DFT()
+file = open('test.jpg', 'rb')
+parse_exif(file)
+file.close()
 
