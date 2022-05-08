@@ -1,9 +1,14 @@
 from classes.Jpeg_Image import JpegImage
-from chunk_info.chunk_dict import chunks
 
 
-jpeg = JpegImage("lizard.jpg")
-jpeg.read_chunks()
-for chunk in jpeg.chunks:
-    print(chunks[chunk[0]])
+jpeg = JpegImage("test.jpg")
+jpeg.read_markers()
+jpeg.display_image()
+jpeg.DFT()
+jpeg.parse_app0()
+jpeg.parse_exif()
+jpeg.save_anon()
+for marker in jpeg.markers:
+    print(marker)
+
     
