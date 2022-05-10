@@ -15,7 +15,6 @@ class JpegImage:
         self.markers = []
         self.anon = []
         self.app0 = []
-        self.app1 = []
 
     def get_segment_length(self, begin):
         return (self.binary_img[begin] << 8) | self.binary_img[begin + 1]
@@ -28,11 +27,9 @@ class JpegImage:
                 i += 2
                 if next_byte != 0x00:
                     self.markers.append(marker_dict.get(next_byte, "UNKNOWN"))
-                    if not (0xd0 <= next_byte <= 0xd9):  # no payload marker
+                    if not (next_byte == 0xd8 or next_byte == 0xd9 or (0xd0 <= next_byte <= 0xd7)):  # no payload marker
                         if next_byte == 0xe0:
                             self.app0 = self.binary_img[i:i + self.get_segment_length(i)]
-                        elif next_byte == 0xe1:
-                            self.app1 = self.binary_img[i:i + self.get_segment_length(i)]
                         i += self.get_segment_length(i)
                     elif next_byte == 0xd9:
                         break
@@ -57,7 +54,7 @@ class JpegImage:
                 i += 2
                 if next_byte in necessary_chunks:
                     self.anon += [0xff, next_byte]
-                    if not (0xd0 <= next_byte <= 0xd9):  # no payload marker
+                    if not (next_byte == 0xd8 or next_byte == 0xd9 or (0xd0 <= next_byte <= 0xd7)):  # no payload marker
                         self.anon += self.binary_img[i:i + self.get_segment_length(i)]
                         i += self.get_segment_length(i)
                         if next_byte == 0xda:
@@ -155,6 +152,7 @@ class JpegImage:
         cv.imshow("Magnitude spectrum", amplitude_spectrum)
         cv.waitKey()
 
+
     def DFT_phase(self):
         image = cv.imread(self.name, cv.IMREAD_GRAYSCALE)
         if image is None:
@@ -163,54 +161,52 @@ class JpegImage:
         dft = np.fft.fft2(image)
         dft = np.fft.fftshift(dft)
         phase_spectrum = np.angle(dft)
-
+        
         cv.imshow("Phase spectrum", phase_spectrum)
         cv.waitKey()
 
+
     def parse_exif(self):
-        if not self.app1:
-            print("No APP1 marker found!")
+        file = open(self.name, 'rb')
+        content = file.read()
+        try:
+            offset = content.index(bytes.fromhex('FFE1'))
+        except:
+            print("Segment APP1 not found!")
+            return
+        file.seek(offset + 2)
+        app1_data_size = file.read(2)
+        print("APP1 data size:", int.from_bytes(app1_data_size, byteorder='big'))
+        format = file.read(4)
+        print("Format:", format.decode('utf-8'))
+        file.seek(2, 1)
+        start_tiff_header = file.tell()
+        byte_align = file.read(2)
+        if byte_align.decode('utf-8') == 'II':
+            print("Little-endian")
+            byte_align = 'little'
         else:
-            file = open(self.name, 'rb')
-            content = file.read()
-            try:
-                offset = content.index(bytes.fromhex('FFE1'))
-            except:
-                print("Segment APP1 not found!")
-                return
-            file.seek(offset + 2)
-            app1_data_size = file.read(2)
-            print("APP1 data size:", int.from_bytes(app1_data_size, byteorder='big'))
-            format = file.read(4)
-            print("Format:", format.decode('utf-8'))
-            file.seek(2, 1)
-            start_tiff_header = file.tell()
-            byte_align = file.read(2)
-            if byte_align.decode('utf-8') == 'II':
-                print("Little-endian")
-                byte_align = 'little'
-            else:
-                print("Big-endian")
-                byte_align = 'big'
-            file.seek(2, 1)
-            offset = file.read(4)
-            offset = int.from_bytes(offset, byteorder=byte_align)
-            file.seek(start_tiff_header + offset)
+            print("Big-endian")
+            byte_align = 'big'
+        file.seek(2, 1)
+        offset = file.read(4)
+        offset = int.from_bytes(offset, byteorder=byte_align)
+        file.seek(start_tiff_header + offset)
 
-            print('METADATA FROM IFD0:')
-            exif_offset, last_entry_adrress_ifd0 = self.read_entries(file, byte_align)
+        print('METADATA FROM IFD0:')
+        exif_offset, last_entry_adrress_ifd0 = self.read_entries(file, byte_align)
 
-            print("METADATA FROM EXIF_SUBIFD:")
-            file.seek(exif_offset + 12)
-            self.read_entries(file, byte_align)
+        print("METADATA FROM EXIF_SUBIFD:")
+        file.seek(exif_offset + 12)
+        self. read_entries(file, byte_align)
 
-            print("METADATA FROM IFD1:")
-            file.seek(last_entry_adrress_ifd0)
-            offset = file.read(4)
-            offset = int.from_bytes(offset, byteorder=byte_align)
-            file.seek(offset + 12)
-            self.read_entries(file, byte_align)
-            file.close()
+        print("METADATA FROM IFD1:")
+        file.seek(last_entry_adrress_ifd0)
+        offset = file.read(4)
+        offset = int.from_bytes(offset, byteorder=byte_align)
+        file.seek(offset + 12)
+        self.read_entries(file, byte_align)
+        file.close()
 
     def read_entries(self, file, byte_align):
         number_entries = file.read(2)
@@ -252,3 +248,4 @@ class JpegImage:
             last_entry_adrress = file.tell()
         print('----------------------------------------')
         return exif_offset, last_entry_adrress
+
