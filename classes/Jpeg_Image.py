@@ -152,7 +152,6 @@ class JpegImage:
         cv.imshow("Magnitude spectrum", amplitude_spectrum)
         cv.waitKey()
 
-
     def DFT_phase(self):
         image = cv.imread(self.name, cv.IMREAD_GRAYSCALE)
         if image is None:
@@ -164,7 +163,6 @@ class JpegImage:
         
         cv.imshow("Phase spectrum", phase_spectrum)
         cv.waitKey()
-
 
     def parse_exif(self):
         file = open(self.name, 'rb')
@@ -248,4 +246,3 @@ class JpegImage:
             last_entry_adrress = file.tell()
         print('----------------------------------------')
         return exif_offset, last_entry_adrress
-
