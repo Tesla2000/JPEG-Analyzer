@@ -96,7 +96,7 @@ class JpegImage:
         cv.imshow("Test image", image)
         cv.waitKey(0)
 
-    def DFT(self):
+    def DFT_magnitude(self):
         image = cv.imread(self.name, cv.IMREAD_GRAYSCALE)
         if image is None:
             sys.exit("Could not read the image.")
@@ -149,13 +149,31 @@ class JpegImage:
 
         cv.normalize(amplitude_spectrum, amplitude_spectrum, 0, 1, cv.NORM_MINMAX)
 
-        cv.imshow("spectrum magnitude", amplitude_spectrum)
+        cv.imshow("Magnitude spectrum", amplitude_spectrum)
         cv.waitKey()
+
+
+    def DFT_phase(self):
+        image = cv.imread(self.name, cv.IMREAD_GRAYSCALE)
+        if image is None:
+            sys.exit("Could not read the image.")
+        image = cv.resize(image, (600, 800))
+        dft = np.fft.fft2(image)
+        dft = np.fft.fftshift(dft)
+        phase_spectrum = np.angle(dft)
+        
+        cv.imshow("Phase spectrum", phase_spectrum)
+        cv.waitKey()
+
 
     def parse_exif(self):
         file = open(self.name, 'rb')
         content = file.read()
-        offset = content.index(bytes.fromhex('FFE1'))
+        try:
+            offset = content.index(bytes.fromhex('FFE1'))
+        except:
+            print("Segment APP1 not found!")
+            return
         file.seek(offset + 2)
         app1_data_size = file.read(2)
         print("APP1 data size:", int.from_bytes(app1_data_size, byteorder='big'))
