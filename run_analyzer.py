@@ -1,7 +1,7 @@
 from classes.Jpeg_Image import JpegImage
 
 
-jpeg = JpegImage("JPEG_EXIF.jpg")
+jpeg = JpegImage("test_DFT2.jpg")
 jpeg.read_markers()
 jpeg.display_image()
 jpeg.DFT_magnitude()
