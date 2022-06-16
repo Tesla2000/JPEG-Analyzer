@@ -1,4 +1,5 @@
 from chunk_info.chunk_dict import *
+from classes.rsa import RSA
 import cv2 as cv
 import sys
 import numpy as np
@@ -7,7 +8,9 @@ import struct
 
 class JpegImage:
 
-    def __init__(self, filename):
+    def __init__(self, filename, enc_block_size=4):
+        self.enc_block_size = enc_block_size
+        self.rsa = RSA()
         self.name = filename
         file = open(self.name, "rb")
         self.binary_img = list(file.read())
@@ -15,6 +18,10 @@ class JpegImage:
         self.markers = []
         self.anon = []
         self.app0 = []
+        self.dht = []
+        self.sos_data = []
+        self.encrypted_img = []
+        self.decrypted_img = []
 
     def get_segment_length(self, begin):
         return (self.binary_img[begin] << 8) | self.binary_img[begin + 1]
@@ -27,10 +34,20 @@ class JpegImage:
                 i += 2
                 if next_byte != 0x00:
                     self.markers.append(marker_dict.get(next_byte, "UNKNOWN"))
-                    if not (next_byte == 0xd8 or next_byte == 0xd9 or (0xd0 <= next_byte <= 0xd7)):  # no payload marker
-                        if next_byte == 0xe0:
-                            self.app0 = self.binary_img[i:i + self.get_segment_length(i)]
-                        i += self.get_segment_length(i)
+                    if not (0xd0 <= next_byte <= 0xd9):  # no payload marker
+                        if next_byte == 0xda:
+                            i += self.get_segment_length(i)
+                            end = self.read_sos(i)
+                            self.sos_data.append([])
+                            self.sos_data[-1] += self.binary_img[i:i + end]
+                            i += end
+                        else:
+                            if next_byte == 0xe0:
+                                self.app0 = self.binary_img[i:i + self.get_segment_length(i)]
+                            if next_byte == 0xc4:
+                                self.dht.append([])
+                                self.dht[-1] = self.binary_img[i+2:i + self.get_segment_length(i)]
+                            i += self.get_segment_length(i)
                     elif next_byte == 0xd9:
                         break
             else:
@@ -54,7 +71,7 @@ class JpegImage:
                 i += 2
                 if next_byte in necessary_chunks:
                     self.anon += [0xff, next_byte]
-                    if not (next_byte == 0xd8 or next_byte == 0xd9 or (0xd0 <= next_byte <= 0xd7)):  # no payload marker
+                    if not (0xd0 <= next_byte <= 0xd9):  # no payload marker
                         self.anon += self.binary_img[i:i + self.get_segment_length(i)]
                         i += self.get_segment_length(i)
                         if next_byte == 0xda:
@@ -246,3 +263,49 @@ class JpegImage:
             last_entry_adrress = file.tell()
         print('----------------------------------------')
         return exif_offset, last_entry_adrress
+
+    def encrypt_image(self):
+        dht_encrypt = []
+        sos_encrypt = []
+        for dht in self.dht:
+            dht_encrypt.append(self.rsa.list_encrypt(dht, self.enc_block_size))
+        for sos in self.sos_data:
+            sos_encrypt.append(self.rsa.list_encrypt(sos, self.enc_block_size))
+        for dht in dht_encrypt:
+            for idx, i in enumerate(dht[0]):
+                if i == 0xff:
+                    dht[0].insert(idx+1, 0x00)
+        for sos in sos_encrypt:
+            for idx, i in enumerate(sos[0]):
+                if i == 0xff:
+                    sos[0].insert(idx+1, 0x00)
+        i = 0
+        dht_index = 0
+        sos_index = 0
+        while i < len(self.binary_img):
+            if self.binary_img[i] == 0xff:
+                next_byte = self.binary_img[i + 1]
+                i += 2
+                self.encrypted_img += [0xff, next_byte]
+                if not (0xd0 <= next_byte <= 0xd9):  # no payload marker
+                    # if next_byte == 0xc4:  # Writing encrypted DHT (not working)
+                    #     self.encrypted_img += (len(dht_encrypt[dht_index][0])+2).to_bytes(2, byteorder='big')
+                    #     self.encrypted_img += dht_encrypt[dht_index][0]
+                    #     dht_index += 1
+                    #     i += self.get_segment_length(i)
+                    # else:
+                    self.encrypted_img += self.binary_img[i:i + self.get_segment_length(i)]
+                    i += self.get_segment_length(i)
+                    if next_byte == 0xda:  # Writing encrypted sos
+                        end = self.read_sos(i)
+                        self.encrypted_img += sos_encrypt[sos_index][0]
+                        sos_index += 1
+                        i += end
+            else:
+                i += 1
+
+    def save_encrypted(self):
+        self.encrypt_image()
+        file = open("enc.jpg", "wb")
+        file.write(bytes(self.encrypted_img))
+        file.close()
