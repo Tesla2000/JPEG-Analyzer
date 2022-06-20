@@ -9,6 +9,9 @@ import struct
 class JpegImage:
 
     def __init__(self, filename, enc_block_size=4):
+        if enc_block_size >= 32:  # Decryption doesn't work if block size >= 32
+            print("Warning! Block size too big! Setting block size value to 31")
+            enc_block_size = 31
         self.enc_block_size = enc_block_size
         self.rsa = RSA()
         self.name = filename
@@ -22,6 +25,8 @@ class JpegImage:
         self.sos_data = []
         self.encrypted_img = []
         self.decrypted_img = []
+        self.encrypted_dht = []
+        self.encrypted_sos = []
 
     def get_segment_length(self, begin):
         return (self.binary_img[begin] << 8) | self.binary_img[begin + 1]
@@ -280,6 +285,8 @@ class JpegImage:
                 if i == 0xff:
                     sos[0].insert(idx+1, 0x00)
         i = 0
+        self.encrypted_dht = dht_encrypt
+        self.encrypted_sos = sos_encrypt
         dht_index = 0
         sos_index = 0
         while i < len(self.binary_img):
@@ -289,7 +296,7 @@ class JpegImage:
                 self.encrypted_img += [0xff, next_byte]
                 if not (0xd0 <= next_byte <= 0xd9):  # no payload marker
                     # if next_byte == 0xc4:  # Writing encrypted DHT (not working)
-                    #     self.encrypted_img += (len(dht_encrypt[dht_index][0])+2).to_bytes(2, byteorder='big')
+                    #     self.encrypted_img += list((len(dht_encrypt[dht_index][0])+2).to_bytes(2, byteorder='big'))
                     #     self.encrypted_img += dht_encrypt[dht_index][0]
                     #     dht_index += 1
                     #     i += self.get_segment_length(i)
@@ -308,4 +315,36 @@ class JpegImage:
         self.encrypt_image()
         file = open("enc.jpg", "wb")
         file.write(bytes(self.encrypted_img))
+        file.close()
+
+    def decrypt_image(self):
+        sos_decrypt = []
+        for sos in self.encrypted_sos:
+            for idx, i in enumerate(sos[0]):
+                if i == 0xff:
+                    sos[0].pop(idx+1)
+        for sos in self.encrypted_sos:
+            sos_decrypt.append(self.rsa.list_decrypt(sos[0], self.enc_block_size, sos[1]))
+        i = 0
+        sos_index = 0
+        while i < len(self.binary_img):
+            if self.binary_img[i] == 0xff:
+                next_byte = self.binary_img[i + 1]
+                i += 2
+                self.decrypted_img += [0xff, next_byte]
+                if not (0xd0 <= next_byte <= 0xd9):  # no payload marker
+                    self.decrypted_img += self.binary_img[i:i + self.get_segment_length(i)]
+                    i += self.get_segment_length(i)
+                    if next_byte == 0xda:  # Writing decrypted sos
+                        end = self.read_sos(i)
+                        self.decrypted_img += sos_decrypt[sos_index]
+                        sos_index += 1
+                        i += end
+            else:
+                i += 1
+
+    def save_decrypted(self):
+        self.decrypt_image()
+        file = open("dec.jpg", "wb")
+        file.write(bytes(self.decrypted_img))
         file.close()

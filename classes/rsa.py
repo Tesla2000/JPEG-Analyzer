@@ -7,8 +7,6 @@ class RSA:
     def __init__(self):
         self.p = 0
         self.q = 0
-        self.c = 0
-        self.m = 0
         self.e = 0
         while not sympy.isprime(self.p):
             self.p = random.randint(2 ** 127, 2 ** 128)
@@ -21,12 +19,10 @@ class RSA:
         self.d = pow(self.e, -1, self.phi)
 
     def encrypt(self, m):
-        self.c = pow(m, self.e, self.n)
-        return self.c
+        return pow(m, self.e, self.n)
 
     def decrypt(self, c):
-        self.m = pow(c, self.d, self.n)
-        return self.m
+        return pow(c, self.d, self.n)
 
     def list_encrypt(self, li, block_size):
         list_split, last_length = split(li, block_size)
