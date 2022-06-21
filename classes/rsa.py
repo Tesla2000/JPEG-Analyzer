@@ -40,27 +40,26 @@ class RSA:
             self.decrypt(int.from_bytes(list_split[-1], byteorder='big')).to_bytes(last_len, byteorder='big')
         return list_decrypted
 
-    def list_encrypt_cbc(self, li, block_size, init_vec=0):
+    def list_encrypt_cfb(self, li, block_size, init_vec=0):
         list_split, last_length = split(li, block_size)
         list_encrypted = [
-            self.encrypt(int.from_bytes(list_split[0], byteorder='big') ^ init_vec).to_bytes(32, byteorder='big')]
+            (self.encrypt(init_vec) ^ int.from_bytes(list_split[0], byteorder='big')).to_bytes(32, byteorder='big')]
         for i in range(1, len(list_split)):
-            list_encrypted.append(self.encrypt(int.from_bytes(list_split[i], byteorder='big') ^ int.from_bytes(
-                list_encrypted[i-1], byteorder='big')).to_bytes(32, byteorder='big'))
-        list_encrypted = b''.join(list_encrypted)
+            list_encrypted.append((self.encrypt(int.from_bytes(list_encrypted[i-1], byteorder='big')) ^ int.from_bytes(
+                list_split[i], byteorder='big')).to_bytes(32, byteorder='big'))
+        list_encrypted = list(b''.join(list_encrypted))
         return list_encrypted, last_length
 
-    def list_decrypt_cbc(self, li, block_size, last_len, init_vec=0):
+    def list_decrypt_cfb(self, li, block_size, last_len, init_vec=0):
         list_split, last_length = split(li, 32)
         list_decrypted = [
-            (self.decrypt(int.from_bytes(list_split[0], byteorder='big')) ^
-             init_vec).to_bytes(block_size, byteorder='big')]
+            (self.encrypt(init_vec) ^ int.from_bytes(list_split[0], byteorder='big')).to_bytes(block_size, byteorder='big')]
         for i in range(1, len(list_split) - 1):
-            list_decrypted.append((self.decrypt(int.from_bytes(
-                list_split[i], byteorder='big') ^ int.from_bytes(list_split[i-1], byteorder='big'))).to_bytes(block_size, byteorder='big'))
-        list_decrypted.append((self.decrypt(int.from_bytes(
-            list_split[-1], byteorder='big') ^ int.from_bytes(list_split[-2], byteorder='big'))).to_bytes(last_len, byteorder='big'))
-        list_decrypted = b''.join(list_decrypted)
+            list_decrypted.append((self.encrypt(int.from_bytes(list_split[i - 1], byteorder='big')) ^ int.from_bytes(
+                list_split[i], byteorder='big')).to_bytes(block_size, byteorder='big'))
+        list_decrypted.append((self.encrypt(int.from_bytes(list_split[-2], byteorder='big')) ^ int.from_bytes(
+                list_split[-1], byteorder='big')).to_bytes(last_len, byteorder='big'))
+        list_decrypted = list(b''.join(list_decrypted))
         return list_decrypted
 
     def print_keys(self):

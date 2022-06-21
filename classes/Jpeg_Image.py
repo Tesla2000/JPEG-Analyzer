@@ -275,7 +275,8 @@ class JpegImage:
         for dht in self.dht:
             dht_encrypt.append(self.rsa.list_encrypt(dht, self.enc_block_size))
         for sos in self.sos_data:
-            sos_encrypt.append(self.rsa.list_encrypt(sos, self.enc_block_size))
+            sos_encrypt.append(self.rsa.list_encrypt_cfb(sos, self.enc_block_size))
+            # sos_encrypt.append(self.rsa.list_encrypt(sos, self.enc_block_size))
         for dht in dht_encrypt:
             for idx, i in enumerate(dht[0]):
                 if i == 0xff:
@@ -324,7 +325,8 @@ class JpegImage:
                 if i == 0xff:
                     sos[0].pop(idx+1)
         for sos in self.encrypted_sos:
-            sos_decrypt.append(self.rsa.list_decrypt(sos[0], self.enc_block_size, sos[1]))
+            # sos_decrypt.append(self.rsa.list_decrypt(sos[0], self.enc_block_size, sos[1]))
+            sos_decrypt.append(self.rsa.list_decrypt_cfb(sos[0], self.enc_block_size, sos[1]))
         i = 0
         sos_index = 0
         while i < len(self.binary_img):
