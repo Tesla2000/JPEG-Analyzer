@@ -1,14 +1,19 @@
+import struct
+import sys
+from typing import Literal
+from typing import Union
+
+import cv2 as cv
+import numpy as np
+
 from chunk_info.chunk_dict import *
 from classes.rsa import RSA
-import cv2 as cv
-import sys
-import numpy as np
-import struct
+from protocols.protocols import File
 
 
 class JpegImage:
 
-    def __init__(self, filename, enc_block_size=4):
+    def __init__(self, filename: Union[bytes, int, str], enc_block_size: int=4):
         if enc_block_size >= 32:  # Decryption doesn't work if block size >= 32
             print("Warning! Block size too big! Setting block size value to 31")
             enc_block_size = 31
@@ -28,7 +33,7 @@ class JpegImage:
         self.encrypted_dht = []
         self.encrypted_sos = []
 
-    def get_segment_length(self, begin):
+    def get_segment_length(self, begin: int):
         return (self.binary_img[begin] << 8) | self.binary_img[begin + 1]
 
     def read_markers(self):
@@ -58,7 +63,7 @@ class JpegImage:
             else:
                 i += 1
 
-    def read_sos(self, begin):
+    def read_sos(self, begin: int):
         end = 0
         for i in range(begin, len(self.binary_img)):
             if self.binary_img[i] == 0xff:
@@ -228,7 +233,7 @@ class JpegImage:
         self.read_entries(file, byte_align)
         file.close()
 
-    def read_entries(self, file, byte_align):
+    def read_entries(self, file: File, byte_align: Literal['little', 'big']):
         number_entries = file.read(2)
         number_entries = int.from_bytes(number_entries, byte_align)
         start_first_entry = file.tell()
