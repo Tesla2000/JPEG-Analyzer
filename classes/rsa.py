@@ -1,5 +1,9 @@
 import random
+from collections.abc import Sequence
+from typing import Union
+
 import sympy
+
 from functions.rsa_misc import *
 
 
@@ -18,20 +22,20 @@ class RSA:
             self.e = random.randint(1, self.phi)  # public key
         self.d = pow(self.e, -1, self.phi)  # private key
 
-    def encrypt(self, m):
+    def encrypt(self, m: Union[complex, float, int]):
         return pow(m, self.e, self.n)
 
-    def decrypt(self, c):
+    def decrypt(self, c: Union[complex, float, int]):
         return pow(c, self.d, self.n)
 
-    def list_encrypt(self, li, block_size):
+    def list_encrypt(self, li: Sequence, block_size: int):
         list_split, last_length = split(li, block_size)
         list_encrypted = []
         for i in list_split:
             list_encrypted += self.encrypt(int.from_bytes(i, byteorder='big')).to_bytes(32, byteorder='big')
         return list_encrypted, last_length
 
-    def list_decrypt(self, li, block_size, last_len):
+    def list_decrypt(self, li: Sequence, block_size, last_len):
         list_split, last_length = split(li, 32)
         list_decrypted = []
         for i in list_split[:-1]:
@@ -40,7 +44,7 @@ class RSA:
             self.decrypt(int.from_bytes(list_split[-1], byteorder='big')).to_bytes(last_len, byteorder='big')
         return list_decrypted
 
-    def list_encrypt_cfb(self, li, block_size, init_vec=0):
+    def list_encrypt_cfb(self, li: Sequence, block_size: int, init_vec=0):
         list_split, last_length = split(li, block_size)
         list_encrypted = [
             (self.encrypt(init_vec) ^ int.from_bytes(list_split[0], byteorder='big')).to_bytes(32, byteorder='big')]
@@ -50,7 +54,7 @@ class RSA:
         list_encrypted = list(b''.join(list_encrypted))
         return list_encrypted, last_length
 
-    def list_decrypt_cfb(self, li, block_size, last_len, init_vec=0):
+    def list_decrypt_cfb(self, li: Sequence, block_size, last_len, init_vec=0):
         list_split, last_length = split(li, 32)
         list_decrypted = [
             (self.encrypt(init_vec) ^ int.from_bytes(list_split[0], byteorder='big')).to_bytes(block_size, byteorder='big')]
